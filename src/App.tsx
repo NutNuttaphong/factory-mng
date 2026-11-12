@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Activity,
   LogOut,
+  Lock,
   Package,
   Menu
 } from 'lucide-react';
@@ -166,6 +167,14 @@ export default function App() {
     availableQty: number;
     isAvailable: boolean;
   }>>([]);
+
+  // Change Password Modal States
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // Telemetry KPIs
   const [kpis, setKpis] = useState<DashboardKPIs>({
@@ -495,11 +504,66 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    const activeToken = localStorage.getItem('token');
+    if (activeToken && !backendOffline) {
+      void api
+        .post('/auth/logout', undefined, {
+          headers: { Authorization: `Bearer ${activeToken}` },
+        })
+        .catch(() => {});
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setToken(null);
     setCurrentUser(null);
+    setShowPasswordModal(false);
+    setCurrentPasswordInput('');
+    setNewPasswordInput('');
+    setConfirmPasswordInput('');
+    setPasswordError('');
     navigate('/');
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+
+    if (newPasswordInput.length < 8) {
+      setPasswordError('New password must be at least 8 characters');
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+    if (backendOffline) {
+      setPasswordError('Cannot change password while backend is offline');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const res = await api.post('/auth/change-password', {
+        currentPassword: currentPasswordInput,
+        newPassword: newPasswordInput,
+      });
+      if (res.data?.accessToken) {
+        localStorage.setItem('token', res.data.accessToken);
+        setToken(res.data.accessToken);
+      }
+      setShowPasswordModal(false);
+      setCurrentPasswordInput('');
+      setNewPasswordInput('');
+      setConfirmPasswordInput('');
+      success('Password changed successfully');
+    } catch (err: unknown) {
+      const apiMsg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      setPasswordError(
+        Array.isArray(apiMsg) ? apiMsg.join(', ') : apiMsg || 'Failed to update password',
+      );
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const hasPermission = (code: string) => {
@@ -1461,25 +1525,54 @@ export default function App() {
               <span className="user-role">{currentUser?.roles?.[0] || 'Super Admin'}</span>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-sub)',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'color 0.2s'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.color = 'var(--danger)'}
-            onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-sub)'}
-            title="Sign Out"
-          >
-            <LogOut size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button
+              onClick={() => {
+                setPasswordError('');
+                setCurrentPasswordInput('');
+                setNewPasswordInput('');
+                setConfirmPasswordInput('');
+                setShowPasswordModal(true);
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-sub)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'color 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.color = 'var(--primary-color)'}
+              onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-sub)'}
+              title="Change Password"
+              aria-label="Change Password"
+            >
+              <Lock size={17} />
+            </button>
+            <button
+              onClick={handleLogout}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-sub)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'color 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.color = 'var(--danger)'}
+              onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-sub)'}
+              title="Sign Out"
+              aria-label="Sign Out"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -1717,6 +1810,63 @@ export default function App() {
                 Adjust Stock
               </Button>
             </div>
+          </Modal>
+
+          {/* Change Password Modal */}
+          <Modal
+            isOpen={showPasswordModal}
+            title="Change Account Password"
+            onClose={() => setShowPasswordModal(false)}
+          >
+            <form onSubmit={handleChangePassword}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {passwordError && (
+                  <div style={{ padding: '10px 12px', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#EF4444', fontSize: '13px' }}>
+                    {passwordError}
+                  </div>
+                )}
+                <div className="form-group">
+                  <label>Current Password</label>
+                  <input
+                    type="password"
+                    className="form-control"
+                    value={currentPasswordInput}
+                    onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>New Password (min 8 characters)</label>
+                  <input
+                    type="password"
+                    className="form-control"
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    minLength={8}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Confirm New Password</label>
+                  <input
+                    type="password"
+                    className="form-control"
+                    value={confirmPasswordInput}
+                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                    minLength={8}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <Button type="button" variant="secondary" onClick={() => setShowPasswordModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={changingPassword}>
+                  {changingPassword ? 'Updating...' : 'Update Password'}
+                </Button>
+              </div>
+            </form>
           </Modal>
         </main>
       </div>
