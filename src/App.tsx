@@ -455,33 +455,40 @@ export default function App() {
       setCurrentUser(res.data.user);
       setBackendOffline(false);
     } catch (err: any) {
-      console.log('Login failed, running offline mock session.');
-      const matchingMock = MOCK_CREDENTIALS.find((c) => c.email === loginEmail);
-      if (matchingMock) {
-        const dummyUser = {
-          id: 'u-temp',
-          email: matchingMock.email,
-          fullName: matchingMock.email.split('@')[0].toUpperCase(),
-          roles: [matchingMock.role],
-          permissions: matchingMock.role === 'Super Admin'
-            ? ['USER_VIEW', 'USER_CREATE', 'USER_UPDATE', 'USER_DELETE', 'PRODUCT_VIEW', 'PRODUCT_CREATE', 'PRODUCT_UPDATE', 'PURCHASE_CREATE', 'PURCHASE_APPROVE', 'STOCK_VIEW', 'STOCK_ADJUST', 'PRODUCTION_CREATE', 'PRODUCTION_APPROVE', 'REPORT_VIEW']
-            : ['PRODUCT_VIEW', 'STOCK_VIEW', 'REPORT_VIEW']
-        };
+      // Only allow offline mock demo login in local development when the backend is unreachable
+      if (!err.response && import.meta.env.DEV) {
+        console.log('Backend unreachable in dev mode, running offline mock session.');
+        const matchingMock = MOCK_CREDENTIALS.find((c) => c.email === loginEmail);
+        if (matchingMock) {
+          const dummyUser = {
+            id: 'u-temp',
+            email: matchingMock.email,
+            fullName: matchingMock.email.split('@')[0].toUpperCase(),
+            roles: [matchingMock.role],
+            permissions: matchingMock.role === 'Super Admin'
+              ? ['USER_VIEW', 'USER_CREATE', 'USER_UPDATE', 'USER_DELETE', 'PRODUCT_VIEW', 'PRODUCT_CREATE', 'PRODUCT_UPDATE', 'PURCHASE_CREATE', 'PURCHASE_APPROVE', 'STOCK_VIEW', 'STOCK_ADJUST', 'PRODUCTION_CREATE', 'PRODUCTION_APPROVE', 'REPORT_VIEW']
+              : ['PRODUCT_VIEW', 'STOCK_VIEW', 'REPORT_VIEW']
+          };
 
-        if (matchingMock.role === 'Manager') dummyUser.permissions.push('PURCHASE_APPROVE', 'PRODUCTION_APPROVE');
-        if (matchingMock.role === 'Purchasing') dummyUser.permissions.push('PURCHASE_CREATE');
-        if (matchingMock.role === 'Warehouse') dummyUser.permissions.push('STOCK_ADJUST');
-        if (matchingMock.role === 'Production') dummyUser.permissions.push('PRODUCTION_CREATE');
-        if (matchingMock.role === 'QA') dummyUser.permissions.push('REPORT_VIEW');
-        if (matchingMock.role === 'Sales') dummyUser.permissions.push('PRODUCT_CREATE');
+          if (matchingMock.role === 'Manager') dummyUser.permissions.push('PURCHASE_APPROVE', 'PRODUCTION_APPROVE');
+          if (matchingMock.role === 'Purchasing') dummyUser.permissions.push('PURCHASE_CREATE');
+          if (matchingMock.role === 'Warehouse') dummyUser.permissions.push('STOCK_ADJUST');
+          if (matchingMock.role === 'Production') dummyUser.permissions.push('PRODUCTION_CREATE');
+          if (matchingMock.role === 'QA') dummyUser.permissions.push('REPORT_VIEW');
+          if (matchingMock.role === 'Sales') dummyUser.permissions.push('PRODUCT_CREATE');
 
-        localStorage.setItem('token', 'mock_jwt_token_123');
-        localStorage.setItem('user', JSON.stringify(dummyUser));
-        setToken('mock_jwt_token_123');
-        setCurrentUser(dummyUser);
-      } else {
-        setLoginError('Invalid credentials');
+          localStorage.setItem('token', 'mock_jwt_token_123');
+          localStorage.setItem('user', JSON.stringify(dummyUser));
+          setToken('mock_jwt_token_123');
+          setCurrentUser(dummyUser);
+          return;
+        }
       }
+
+      const apiMsg = err.response?.data?.message;
+      setLoginError(
+        Array.isArray(apiMsg) ? apiMsg.join(', ') : apiMsg || 'Invalid email or password',
+      );
     } finally {
       setLoading(false);
     }
