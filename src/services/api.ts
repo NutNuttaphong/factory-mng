@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const rawBaseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/+$/, '');
+const defaultBaseUrl = import.meta.env.PROD
+  ? 'https://factory-mng-api-production.up.railway.app/api'
+  : 'http://localhost:3000/api';
+const rawBaseUrl = (import.meta.env.VITE_API_URL || defaultBaseUrl).replace(/\/+$/, '');
 const baseURL = rawBaseUrl.endsWith('/api') ? rawBaseUrl : `${rawBaseUrl}/api`;
 
 const api = axios.create({
